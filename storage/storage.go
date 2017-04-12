@@ -3,6 +3,8 @@ package storage
 import (
 	"errors"
 	"math"
+
+	"github.com/dhconnelly/rtreego"
 )
 
 type (
@@ -15,13 +17,16 @@ type (
 		LastLocation Location
 	}
 	DriverStorage struct {
-		drivers map[int]*Driver
+		drivers    map[int]*Driver
+		localtions *rtreego.Rtree
 	}
 )
 
 func New() *DriverStorage {
 	d := &DriverStorage{}
 	d.drivers = make(map[int]*Driver)
+	d.localtions = rtreego.NewTree(2, 25, 50)
+
 	return d
 }
 
@@ -35,28 +40,44 @@ func (d *DriverStorage) Get(key int) (*Driver, error) {
 	return driver, nil
 }
 
-func (d *DriverStorage) Set(key int, value *Driver) {
-	d.drivers[key] = value
+func (d *DriverStorage) Set(key int, driver *Driver) {
+	_, ok := d.drivers[key]
+	if !ok {
+		d.localtions.Insert(driver)
+	}
+	d.drivers[key] = driver
 }
 
 func (d *DriverStorage) Delete(key int) error {
-	_, ok := d.drivers[key]
+	driver, ok := d.drivers[key]
 	if !ok {
 		return errors.New("driver does not exist")
 	}
-	delete(d.drivers, key)
-	return nil
+
+	if d.localtions.Delete(driver) {
+		delete(d.drivers, key)
+		return nil
+	}
+	return errors.New("could not remove driver")
 }
 
-func (d *DriverStorage) Nearest(radius, lat, lon float64) []*Driver {
-	nearestMap := make([]*Driver, 0)
-	for _, driver := range d.drivers {
-		dis := Distance(lat, lon, driver.LastLocation.Lat, driver.LastLocation.Lon)
-		if dis < radius {
-			nearestMap = append(nearestMap, driver)
+func (d *DriverStorage) Nearest(number int, lat, lon float64) []*Driver {
+	point := rtreego.Point{lat, lon}
+	results := d.localtions.NearestNeighbors(number, point)
+	var drivers []*Driver
+
+	for _, item := range results {
+		if item == nil {
+			continue
 		}
+		drivers = append(drivers, item.(*Driver))
 	}
-	return nearestMap
+
+	return drivers
+}
+
+func (d *Driver) Bounds() *rtreego.Rect {
+	return rtreego.Point{d.LastLocation.Lat, d.LastLocation.Lon}.ToRect(0.01)
 }
 
 // Distance function returns the distance (in meters) between two points of
