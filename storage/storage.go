@@ -13,14 +13,14 @@ import (
 
 type (
 	Location struct {
-		Lat float64
-		Lon float64
+		Lat float64 `json:"lat"`
+		Lon float64 `json:"lon"`
 	}
 	Driver struct {
-		ID           int
-		LastLocation Location
-		Expiration   int64
-		Locations    *lru.LRU
+		ID           int      `json:"id"`
+		LastLocation Location `json:"location"`
+		Expiration   int64    `json:"-"`
+		Locations    *lru.LRU `json:"-"`
 	}
 	DriverStorage struct {
 		mu         *sync.RWMutex
